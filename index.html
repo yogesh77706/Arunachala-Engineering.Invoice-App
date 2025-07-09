@@ -131,7 +131,7 @@
                 padding: 10px;
                 border: none;
                 box-shadow: none;
-                font-size: 12px; /* Even smaller font for print */
+                font-size: 11px; /* Even smaller font for print */
                 line-height: 1.4;
             }
             .watermark {
@@ -186,7 +186,7 @@
                     <p class="text-sm font-medium text-gray-600">Mechanical, Electrical, Civil & Instrumentation Contractor</p>
                     <div class="text-xs mt-2 grid grid-cols-3 gap-1">
                         <p><strong>ESB NO:</strong> KSB 2311</p>
-                        <p><strong>PAN NO:</strong> AXXXXXX123</p>
+                        <p><strong>PAN NO:</strong> ALBPD6155H</p>
                         <p><strong>GSTIN:</strong> 33ALBPD6155H2ZG</p>
                     </div>
                 </header>
@@ -194,21 +194,21 @@
                 <!-- Invoice Meta -->
                 <div class="flex flex-col sm:flex-row justify-between mt-3">
                     <div class="w-full sm:w-1/2 mb-4 sm:mb-0 bill-to-details">
-                        <h2 class="font-bold text-gray-800">Bill To:</h2>
+                        <h2 class="font-bold text-gray-800 text-sm">Bill To:</h2>
                         <textarea class="w-full h-20 p-2 border border-gray-200 rounded mt-1" placeholder="Customer Name & Address"></textarea>
                         <div class="flex items-center mt-2" id="customerGstinContainer">
-                             <label for="customerGstin" class="font-bold mr-2 whitespace-nowrap">GSTIN:</label>
+                             <label for="customerGstin" class="font-bold mr-2 whitespace-nowrap text-sm">GSTIN:</label>
                              <input type="text" id="customerGstin" placeholder="Enter Customer GSTIN" class="border-gray-200">
                         </div>
                     </div>
                     <div class="w-full sm:w-1/2 text-left sm:text-right space-y-1">
                         <h1 id="invoiceTitle" class="text-xl font-bold text-gray-800">TAX INVOICE</h1>
                         <div class="flex items-center sm:justify-end">
-                            <label for="invoiceNo" class="font-bold mr-2">Invoice #:</label>
+                            <label for="invoiceNo" class="font-bold mr-2 text-sm">Invoice #:</label>
                             <input type="text" id="invoiceNo" value="INV-001" class="w-32 text-left sm:text-right p-1 border border-gray-200 rounded">
                         </div>
                         <div class="flex items-center sm:justify-end">
-                            <label for="invoiceDate" class="font-bold mr-2">Date:</label>
+                            <label for="invoiceDate" class="font-bold mr-2 text-sm">Date:</label>
                             <input type="date" id="invoiceDate" class="w-32 text-left sm:text-right p-1 border border-gray-200 rounded">
                         </div>
                     </div>
@@ -292,7 +292,7 @@
                 <!-- Signature Line -->
                 <div class="flex justify-end mt-8">
                     <div class="w-56 text-center">
-                        <p class="text-sm font-semibold mb-8">For Arunachala Engineering</p>
+                        <p class="text-sm font-semibold mb-10">For Arunachala Engineering</p>
                         <div class="border-t border-gray-500"></div>
                         <p class="text-sm font-semibold mt-2">Authorised Signatory</p>
                     </div>
@@ -428,26 +428,27 @@
                     const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
                     const rate = parseFloat(row.querySelector('.item-rate').value) || 0;
                     const gstRate = parseFloat(row.querySelector('.item-gst').value) || 0;
-                    const hsn = row.querySelector('.item-hsn').value || 'N/A';
+                    const hsn = row.querySelector('.item-hsn').value.trim() || 'N/A';
                     
                     const amount = qty * rate;
                     row.querySelector('.item-amount').textContent = formatCurrency(amount);
                     subtotal += amount;
 
-                    if (gstToggle.checked) {
+                    if (gstToggle.checked && gstRate > 0) {
                         const gstAmount = amount * (gstRate / 100);
                         const cgst = gstAmount / 2;
                         const sgst = gstAmount / 2;
                         
                         totalCgst += cgst;
                         totalSgst += sgst;
-
-                        if (!taxSummary[gstRate]) {
-                            taxSummary[gstRate] = { hsn: hsn, taxableValue: 0, cgst: 0, sgst: 0 };
+                        
+                        // CORRECTED LOGIC: Group tax summary by HSN/SAC code
+                        if (!taxSummary[hsn]) {
+                            taxSummary[hsn] = { taxableValue: 0, gstRate: gstRate, cgst: 0, sgst: 0 };
                         }
-                        taxSummary[gstRate].taxableValue += amount;
-                        taxSummary[gstRate].cgst += cgst;
-                        taxSummary[gstRate].sgst += sgst;
+                        taxSummary[hsn].taxableValue += amount;
+                        taxSummary[hsn].cgst += cgst;
+                        taxSummary[hsn].sgst += sgst;
                     }
                 });
 
@@ -470,15 +471,18 @@
                 taxSummaryBody.innerHTML = '';
                 if (!gstToggle.checked) return;
 
-                for (const rate in summary) {
-                    const data = summary[rate];
+                // CORRECTED LOGIC: Loop through summary object keyed by HSN
+                for (const hsn in summary) {
+                    const data = summary[hsn];
                     const totalTax = data.cgst + data.sgst;
+                    const gstRate = data.gstRate;
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td class="border p-1">${data.hsn}</td>
+                        <td class="border p-1">${hsn}</td>
                         <td class="border p-1 text-right">${formatCurrency(data.taxableValue)}</td>
-                        <td class="border p-1 text-right">${rate/2}%</td>
+                        <td class="border p-1 text-right">${gstRate / 2}%</td>
                         <td class="border p-1 text-right">${formatCurrency(data.cgst)}</td>
+                        <td class="border p-1 text-right">${gstRate / 2}%</td>
                         <td class="border p-1 text-right">${formatCurrency(data.sgst)}</td>
                         <td class="border p-1 text-right">${formatCurrency(totalTax)}</td>
                     `;
