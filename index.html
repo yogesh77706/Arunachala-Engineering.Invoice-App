@@ -164,16 +164,32 @@
                 font-size: 10vw;
             }
         }
+        /* Toast Notification */
+        #toast {
+            position: fixed;
+            top: -100px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 1rem 2rem;
+            border-radius: 0.5rem;
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            transition: top 0.5s ease-in-out;
+            z-index: 100;
+        }
+        #toast.show {
+            top: 20px;
+        }
     </style>
 </head>
 <body class="bg-gray-100 p-4 sm:p-8">
-
+    <div id="toast"></div>
     <div class="max-w-4xl mx-auto">
         <!-- CONTROLS -->
         <div class="controls">
             <h1 class="text-2xl font-bold text-gray-800 mb-4">Invoice Controls</h1>
-            <div class="flex flex-wrap items-center justify-between gap-4">
-                <!-- GST Toggle -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="flex items-center space-x-4">
                     <span class="font-medium text-gray-700">Non-GST</span>
                     <label class="toggle-switch">
@@ -182,17 +198,14 @@
                     </label>
                     <span class="font-medium text-blue-600">GST Invoice</span>
                 </div>
-                <!-- Action Buttons -->
-                <div class="flex items-center space-x-4">
-                    <button id="addItemBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                        Add Item to End
-                    </button>
-                    <div class="text-center">
-                        <button onclick="window.print()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
-                            Print Invoice
-                        </button>
-                        <p class="text-xs text-gray-500 mt-1 no-print">Tip: Right-click the invoice & select 'Print'.</p>
-                    </div>
+                <div class="flex flex-wrap items-center gap-2">
+                    <button id="newInvoiceBtn" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg">New</button>
+                    <button id="saveInvoiceBtn" class="bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">Save</button>
+                    <select id="loadInvoiceSelect" class="border border-gray-300 rounded-lg py-2 px-3">
+                        <option value="">Load Saved Invoice</option>
+                    </select>
+                    <button id="deleteInvoiceBtn" class="bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg hidden">Delete</button>
+                    <button onclick="window.print()" class="bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg">Print</button>
                 </div>
             </div>
         </div>
@@ -233,7 +246,7 @@
                 <div class="flex flex-col sm:flex-row justify-between mt-3">
                     <div class="w-full sm:w-1/2 mb-4 sm:mb-0 bill-to-details">
                         <h2 class="font-bold text-gray-800 text-sm">Bill To:</h2>
-                        <textarea class="w-full h-20 p-2 border border-gray-200 rounded mt-1" placeholder="Customer Name & Address"></textarea>
+                        <textarea id="customerDetails" class="w-full h-20 p-2 border border-gray-200 rounded mt-1" placeholder="Customer Name & Address"></textarea>
                         <div class="flex items-center mt-2" id="customerGstinContainer">
                              <label for="customerGstin" class="font-bold mr-2 whitespace-nowrap text-sm">GSTIN:</label>
                              <input type="text" id="customerGstin" placeholder="Enter Customer GSTIN" class="border-gray-200">
@@ -353,7 +366,6 @@
             const invoice = document.getElementById('invoice');
             const invoiceTitle = document.getElementById('invoiceTitle');
             const itemsTableBody = document.getElementById('items-table-body');
-            const addItemBtn = document.getElementById('addItemBtn');
             const subtotalEl = document.getElementById('subtotal');
             const cgstEl = document.getElementById('cgst');
             const sgstEl = document.getElementById('sgst');
@@ -363,8 +375,188 @@
             const taxSummaryBody = document.getElementById('tax-summary-body');
             const invoiceDateEl = document.getElementById('invoiceDate');
             const customerGstinContainer = document.getElementById('customerGstinContainer');
+            const invoiceNoEl = document.getElementById('invoiceNo');
+            const customerDetailsEl = document.getElementById('customerDetails');
+            
+            // New UI Elements for DB operations
+            const newInvoiceBtn = document.getElementById('newInvoiceBtn');
+            const saveInvoiceBtn = document.getElementById('saveInvoiceBtn');
+            const loadInvoiceSelect = document.getElementById('loadInvoiceSelect');
+            const deleteInvoiceBtn = document.getElementById('deleteInvoiceBtn');
+            const toastEl = document.getElementById('toast');
 
-            // --- FUNCTIONS ---
+            let db;
+
+            // --- DATABASE LOGIC (IndexedDB) ---
+            function initDB() {
+                const request = indexedDB.open('ArunachalaInvoicesDB', 1);
+
+                request.onupgradeneeded = function(e) {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('invoices')) {
+                        db.createObjectStore('invoices', { keyPath: 'invoiceNo' });
+                    }
+                };
+
+                request.onsuccess = function(e) {
+                    db = e.target.result;
+                    loadInvoiceList();
+                };
+
+                request.onerror = function(e) {
+                    console.error('Database error:', e.target.errorCode);
+                    showToast('Database could not be opened.', 'error');
+                };
+            }
+
+            function saveInvoice() {
+                const invoiceNo = invoiceNoEl.value.trim();
+                if (!invoiceNo) {
+                    showToast('Invoice Number is required to save.', 'error');
+                    return;
+                }
+
+                const items = [];
+                itemsTableBody.querySelectorAll('.item-row').forEach(row => {
+                    items.push({
+                        desc: row.querySelector('.item-desc').value,
+                        hsn: row.querySelector('.item-hsn').value,
+                        qty: row.querySelector('.item-qty').value,
+                        rate: row.querySelector('.item-rate').value,
+                        gst: row.querySelector('.item-gst').value,
+                    });
+                });
+
+                const invoiceData = {
+                    invoiceNo: invoiceNo,
+                    isGst: gstToggle.checked,
+                    customerDetails: customerDetailsEl.value,
+                    customerGstin: document.getElementById('customerGstin').value,
+                    invoiceDate: invoiceDateEl.value,
+                    items: items,
+                };
+
+                const transaction = db.transaction(['invoices'], 'readwrite');
+                const store = transaction.objectStore('invoices');
+                const request = store.put(invoiceData);
+
+                request.onsuccess = function() {
+                    showToast(`Invoice ${invoiceNo} saved successfully!`, 'success');
+                    loadInvoiceList();
+                };
+
+                request.onerror = function() {
+                    showToast(`Error saving invoice ${invoiceNo}.`, 'error');
+                };
+            }
+            
+            function loadInvoiceList() {
+                const transaction = db.transaction(['invoices'], 'readonly');
+                const store = transaction.objectStore('invoices');
+                const request = store.getAllKeys();
+
+                request.onsuccess = function() {
+                    const keys = request.result;
+                    loadInvoiceSelect.innerHTML = '<option value="">Load Saved Invoice</option>';
+                    keys.forEach(key => {
+                        const option = document.createElement('option');
+                        option.value = key;
+                        option.textContent = key;
+                        loadInvoiceSelect.appendChild(option);
+                    });
+                };
+            }
+
+            function loadInvoice(invoiceNo) {
+                if (!invoiceNo) {
+                    clearForm();
+                    return;
+                };
+
+                const transaction = db.transaction(['invoices'], 'readonly');
+                const store = transaction.objectStore('invoices');
+                const request = store.get(invoiceNo);
+
+                request.onsuccess = function() {
+                    const data = request.result;
+                    if (data) {
+                        clearForm(false); // Clear form without creating a new row
+
+                        gstToggle.checked = data.isGst;
+                        invoiceNoEl.value = data.invoiceNo;
+                        customerDetailsEl.value = data.customerDetails;
+                        document.getElementById('customerGstin').value = data.customerGstin;
+                        invoiceDateEl.value = data.invoiceDate;
+
+                        itemsTableBody.innerHTML = ''; // Clear existing items
+                        data.items.forEach(item => {
+                            const row = createItemRow();
+                            row.querySelector('.item-desc').value = item.desc;
+                            row.querySelector('.item-hsn').value = item.hsn;
+                            row.querySelector('.item-qty').value = item.qty;
+                            row.querySelector('.item-rate').value = item.rate;
+                            row.querySelector('.item-gst').value = item.gst;
+                            itemsTableBody.appendChild(row);
+                        });
+
+                        renumberRows();
+                        toggleGstMode();
+                        calculateTotals();
+                        resizeAllTextareas();
+                        deleteInvoiceBtn.classList.remove('hidden');
+                        showToast(`Invoice ${invoiceNo} loaded.`, 'success');
+                    }
+                };
+            }
+            
+            function deleteInvoice(invoiceNo) {
+                if (!invoiceNo || !confirm(`Are you sure you want to delete Invoice #${invoiceNo}?`)) {
+                    return;
+                }
+                const transaction = db.transaction(['invoices'], 'readwrite');
+                const store = transaction.objectStore('invoices');
+                const request = store.delete(invoiceNo);
+
+                request.onsuccess = function() {
+                    showToast(`Invoice ${invoiceNo} deleted.`, 'success');
+                    clearForm();
+                    loadInvoiceList();
+                };
+            }
+
+            function clearForm(addNewRow = true) {
+                invoiceNoEl.value = `INV-${String(Date.now()).slice(-5)}`;
+                customerDetailsEl.value = '';
+                document.getElementById('customerGstin').value = '';
+                invoiceDateEl.valueAsDate = new Date();
+                itemsTableBody.innerHTML = '';
+                if (addNewRow) {
+                    appendItemRow();
+                }
+                deleteInvoiceBtn.classList.add('hidden');
+                loadInvoiceSelect.value = "";
+                calculateTotals();
+            }
+
+            // --- UI FUNCTIONS ---
+            
+            function showToast(message, type = 'success') {
+                toastEl.textContent = message;
+                toastEl.className = type === 'success' ? 'bg-green-500' : 'bg-red-500';
+                toastEl.classList.add('show');
+                setTimeout(() => {
+                    toastEl.classList.remove('show');
+                }, 3000);
+            }
+
+            function resizeTextarea(el) {
+                el.style.height = 'auto';
+                el.style.height = (el.scrollHeight) + 'px';
+            }
+
+            function resizeAllTextareas() {
+                itemsTableBody.querySelectorAll('.item-desc').forEach(resizeTextarea);
+            }
 
             /**
              * Toggles between GST and Non-GST mode
@@ -480,7 +672,6 @@
                         totalCgst += cgst;
                         totalSgst += sgst;
                         
-                        // CORRECTED LOGIC: Group tax summary by HSN/SAC code
                         if (!taxSummary[hsn]) {
                             taxSummary[hsn] = { taxableValue: 0, gstRate: gstRate, cgst: 0, sgst: 0 };
                         }
@@ -509,7 +700,6 @@
                 taxSummaryBody.innerHTML = '';
                 if (!gstToggle.checked) return;
 
-                // CORRECTED LOGIC: Loop through summary object keyed by HSN
                 for (const hsn in summary) {
                     const data = summary[hsn];
                     const totalTax = data.cgst + data.sgst;
@@ -584,7 +774,6 @@
 
             // --- EVENT LISTENERS ---
             gstToggle.addEventListener('change', toggleGstMode);
-            addItemBtn.addEventListener('click', appendItemRow);
             
             itemsTableBody.addEventListener('input', function(e) {
                 if (e.target.matches('.item-qty, .item-rate, .item-gst')) {
@@ -592,8 +781,7 @@
                 }
                 // Auto-resize textarea
                 if (e.target.matches('.item-desc')) {
-                    e.target.style.height = 'auto';
-                    e.target.style.height = (e.target.scrollHeight) + 'px';
+                    resizeTextarea(e.target);
                 }
             });
 
@@ -604,11 +792,16 @@
                     insertItemRowAfter(e.target.closest('.item-row'));
                 }
             });
+            
+            // New Event Listeners
+            newInvoiceBtn.addEventListener('click', () => clearForm());
+            saveInvoiceBtn.addEventListener('click', saveInvoice);
+            loadInvoiceSelect.addEventListener('change', (e) => loadInvoice(e.target.value));
+            deleteInvoiceBtn.addEventListener('click', () => deleteInvoice(loadInvoiceSelect.value));
 
             // --- INITIALIZATION ---
-            invoiceDateEl.valueAsDate = new Date();
-            toggleGstMode();
-            appendItemRow(); // Start with one item row
+            initDB();
+            clearForm();
         });
     </script>
 </body>
