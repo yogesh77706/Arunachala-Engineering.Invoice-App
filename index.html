@@ -5,10 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Arunachala Engineering - Invoice Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Main font: Roboto -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Importing MedievalSharp for the company name and Roboto for the body -->
+    <link href="https://fonts.googleapis.com/css2?family=MedievalSharp&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body {
-            font-family: 'Inter', sans-serif;
+            /* Main font for the body */
+            font-family: 'Roboto', sans-serif;
+        }
+        /* Style for the company name */
+        .company-name {
+            font-family: 'MedievalSharp', cursive;
+            font-size: 2.5rem; /* Adjusted size for the new font */
+            line-height: 1.1;
+            /* font-bold is now handled by a Tailwind class */
+        }
+        /* Style for auto-resizing textarea */
+        .item-desc {
+            resize: none;
+            overflow-y: hidden;
+            min-height: 28px; /* Match the height of other inputs */
         }
         /* A4 Optimization Styles */
         .invoice-box {
@@ -58,7 +76,7 @@
         .invoice-table table tr.item-row:last-child td {
             border-bottom: none;
         }
-        .invoice-table input, .bill-to-details input {
+        .invoice-table input, .invoice-table textarea, .bill-to-details input {
             width: 100%;
             padding: 4px; /* Reduced input padding */
             border: 1px solid #ddd;
@@ -180,14 +198,23 @@
 
             <div style="position: relative; z-index: 1;">
                 <!-- HEADER -->
-                <header class="text-center pb-2 border-b-2 border-gray-300">
-                    <img src="https://imglink.io/i/139ddf51-9ce9-4882-9ace-32486a13faa1.jpg" class="mx-auto mb-2" style="width:100%; max-width:100px;" alt="Arunachala Engineering Logo" onerror="this.onerror=null; this.src='https://placehold.co/100x60/e2e8f0/334155?text=Logo';">
-                    <h1 class="text-3xl font-bold text-gray-800">ARUNACHALA ENGINEERING</h1>
-                    <p class="text-sm font-medium text-gray-600">Mechanical, Electrical, Civil & Instrumentation Contractor</p>
-                    <div class="text-xs mt-2 grid grid-cols-3 gap-1">
-                        <p><strong>ESB NO:</strong> KSB 2311</p>
-                        <p><strong>PAN NO:</strong> ALBPD6155H</p>
-                        <p><strong>GSTIN:</strong> 33ALBPD6155H2ZG</p>
+                <header class="pb-2 mb-4 border-b-2 border-gray-300">
+                    <div class="flex justify-between items-center">
+                        <!-- Left: Logo -->
+                        <div class="w-1/4">
+                            <img src="https://imglink.io/i/139ddf51-9ce9-4882-9ace-32486a13faa1.jpg" style="width:100%; max-width:70px;" alt="Arunachala Engineering Logo" onerror="this.onerror=null; this.src='https://placehold.co/70x50/e2e8f0/334155?text=Logo';">
+                        </div>
+                        <!-- Middle: Company Name and Subtitle -->
+                        <div class="w-1/2 text-center">
+                             <h1 class="company-name text-gray-800 font-bold whitespace-nowrap">Arunachala Engineering</h1>
+                             <p class="text-xs font-medium text-gray-600 mt-1 whitespace-nowrap">Mechanical, Electrical, Civil & Instrumentation Contractor</p>
+                        </div>
+                        <!-- Right: Tax Details -->
+                        <div class="w-1/4 text-right text-xs flex-shrink-0">
+                            <p><strong>ESB NO:</strong> ESB 2311</p>
+                            <p><strong>PAN NO:</strong> ALBPD6155H</p>
+                            <p><strong>GSTIN:</strong> 33ALBPD6155H2ZG</p>
+                        </div>
                     </div>
                 </header>
 
@@ -302,7 +329,7 @@
                 <!-- Footer -->
                 <footer class="mt-4 pt-2 border-t-2 border-gray-300 text-center text-xs">
                     <p class="font-bold">No.790A, Vanavil Nagar, 4th Street, Om Sakthi Nagar, Vengikkal(Vill & Post), Thiruvannamalai(Tk & Dt)-606604</p>
-                    <p>E-mail: dhakshanamoorthy95@gmail.com | Mobile No: 9444249178</p>
+                    <p>E-mail: dhakshanamoorthy5@gmail.com | Mobile No: 9444249178</p>
                 </footer>
             </div>
         </div>
@@ -353,7 +380,7 @@
                 row.classList.add('item-row');
                 row.innerHTML = `
                     <td class="text-center item-sno"></td>
-                    <td><input type="text" class="item-desc" placeholder="Item description"></td>
+                    <td><textarea class="item-desc" placeholder="Item description" rows="1"></textarea></td>
                     <td class="gst-col"><input type="text" class="item-hsn" placeholder="HSN"></td>
                     <td><input type="number" class="item-qty" value="1" min="0" step="any"></td>
                     <td><input type="number" class="item-rate" value="0.00" min="0" step="any"></td>
@@ -361,8 +388,8 @@
                     <td class="text-right item-amount">₹0.00</td>
                     <td class="no-print">
                         <div class="flex items-center space-x-1">
-                            <button class="text-green-500 font-bold add-row-btn p-1 rounded hover:bg-green-100 text-lg">+</button>
-                            <button class="text-red-500 font-bold delete-btn p-1 rounded hover:bg-red-100 text-lg">×</button>
+                            <button class="text-green-500 font-bold add-row-btn p-1 rounded hover:bg-green-100 text-base">+</button>
+                            <button class="text-red-500 font-bold delete-btn p-1 rounded hover:bg-red-100 text-base">×</button>
                         </div>
                     </td>
                 `;
@@ -551,6 +578,11 @@
             itemsTableBody.addEventListener('input', function(e) {
                 if (e.target.matches('.item-qty, .item-rate, .item-gst')) {
                     calculateTotals();
+                }
+                // Auto-resize textarea
+                if (e.target.matches('.item-desc')) {
+                    e.target.style.height = 'auto';
+                    e.target.style.height = (e.target.scrollHeight) + 'px';
                 }
             });
 
