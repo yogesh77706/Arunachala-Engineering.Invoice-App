@@ -163,6 +163,9 @@
             .watermark {
                 font-size: 10vw;
             }
+            #signatureImage.no-sig {
+                display: none;
+            }
         }
         /* Toast Notification */
         #toast {
@@ -185,6 +188,7 @@
 </head>
 <body class="bg-gray-100 p-4 sm:p-8">
     <div id="toast"></div>
+
     <div class="max-w-4xl mx-auto">
         <!-- CONTROLS -->
         <div class="controls">
@@ -341,11 +345,21 @@
                 </div>
                 
                 <!-- Signature Line -->
-                <div class="flex justify-end mt-8">
+                <div class="flex justify-between items-end mt-8">
+                    <div class="no-print">
+                        <label for="signatureUpload" class="cursor-pointer bg-gray-200 hover:bg-gray-300 text-gray-700 font-semibold py-1 px-3 rounded-lg text-xs">
+                            Upload Signature
+                        </label>
+                        <input type="file" id="signatureUpload" class="hidden" accept="image/*">
+                        <button id="removeSignatureBtn" class="text-red-500 text-xs ml-2 hidden">Remove</button>
+                    </div>
                     <div class="w-56 text-center">
-                        <p class="text-sm font-semibold mb-10">For Arunachala Engineering</p>
+                        <div class="h-16 flex justify-center items-center">
+                            <img id="signatureImage" src="" alt="Signature" class="max-h-16 no-sig"/>
+                        </div>
+                        <p class="text-sm font-semibold mb-1">For Arunachala Engineering</p>
                         <div class="border-t border-gray-500"></div>
-                        <p class="text-sm font-semibold mt-2">Authorised Signatory</p>
+                        <p class="text-sm font-semibold mt-1">Authorised Signatory</p>
                     </div>
                 </div>
 
@@ -384,6 +398,11 @@
             const loadInvoiceSelect = document.getElementById('loadInvoiceSelect');
             const deleteInvoiceBtn = document.getElementById('deleteInvoiceBtn');
             const toastEl = document.getElementById('toast');
+
+            // Signature Elements
+            const signatureUpload = document.getElementById('signatureUpload');
+            const signatureImage = document.getElementById('signatureImage');
+            const removeSignatureBtn = document.getElementById('removeSignatureBtn');
 
             let db;
 
@@ -434,6 +453,7 @@
                     customerGstin: document.getElementById('customerGstin').value,
                     invoiceDate: invoiceDateEl.value,
                     items: items,
+                    signature: signatureImage.src, // Save signature
                 };
 
                 const transaction = db.transaction(['invoices'], 'readwrite');
@@ -443,6 +463,7 @@
                 request.onsuccess = function() {
                     showToast(`Invoice ${invoiceNo} saved successfully!`, 'success');
                     loadInvoiceList();
+                    loadInvoiceSelect.value = invoiceNo; // Keep it selected
                 };
 
                 request.onerror = function() {
@@ -457,6 +478,7 @@
 
                 request.onsuccess = function() {
                     const keys = request.result;
+                    const currentVal = loadInvoiceSelect.value;
                     loadInvoiceSelect.innerHTML = '<option value="">Load Saved Invoice</option>';
                     keys.forEach(key => {
                         const option = document.createElement('option');
@@ -464,6 +486,7 @@
                         option.textContent = key;
                         loadInvoiceSelect.appendChild(option);
                     });
+                    loadInvoiceSelect.value = currentVal;
                 };
             }
 
@@ -487,6 +510,15 @@
                         customerDetailsEl.value = data.customerDetails;
                         document.getElementById('customerGstin').value = data.customerGstin;
                         invoiceDateEl.value = data.invoiceDate;
+                        
+                        // Load signature
+                        if (data.signature && data.signature.startsWith('data:image')) {
+                            signatureImage.src = data.signature;
+                            signatureImage.classList.remove('no-sig');
+                            removeSignatureBtn.classList.remove('hidden');
+                        } else {
+                            removeSignature();
+                        }
 
                         itemsTableBody.innerHTML = ''; // Clear existing items
                         data.items.forEach(item => {
@@ -509,18 +541,24 @@
                 };
             }
             
-            function deleteInvoice(invoiceNo) {
-                if (!invoiceNo || !confirm(`Are you sure you want to delete Invoice #${invoiceNo}?`)) {
+            function performDelete(invoiceNo) {
+                 if (!invoiceNo) {
+                    showToast('Please select an invoice to delete.', 'error');
                     return;
-                }
+                 }
+                 
                 const transaction = db.transaction(['invoices'], 'readwrite');
                 const store = transaction.objectStore('invoices');
-                const request = store.delete(invoiceNo);
+                store.delete(invoiceNo);
 
-                request.onsuccess = function() {
+                transaction.oncomplete = function() {
                     showToast(`Invoice ${invoiceNo} deleted.`, 'success');
                     clearForm();
                     loadInvoiceList();
+                };
+
+                transaction.onerror = function() {
+                    showToast(`Error deleting invoice.`, 'error');
                 };
             }
 
@@ -535,6 +573,7 @@
                 }
                 deleteInvoiceBtn.classList.add('hidden');
                 loadInvoiceSelect.value = "";
+                removeSignature();
                 calculateTotals();
             }
 
@@ -557,6 +596,27 @@
             function resizeAllTextareas() {
                 itemsTableBody.querySelectorAll('.item-desc').forEach(resizeTextarea);
             }
+            
+            function handleSignatureUpload(event) {
+                const file = event.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        signatureImage.src = e.target.result;
+                        signatureImage.classList.remove('no-sig');
+                        removeSignatureBtn.classList.remove('hidden');
+                    }
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            function removeSignature() {
+                signatureImage.src = '';
+                signatureImage.classList.add('no-sig');
+                signatureUpload.value = ''; // Reset file input
+                removeSignatureBtn.classList.add('hidden');
+            }
+
 
             /**
              * Toggles between GST and Non-GST mode
@@ -797,7 +857,10 @@
             newInvoiceBtn.addEventListener('click', () => clearForm());
             saveInvoiceBtn.addEventListener('click', saveInvoice);
             loadInvoiceSelect.addEventListener('change', (e) => loadInvoice(e.target.value));
-            deleteInvoiceBtn.addEventListener('click', () => deleteInvoice(loadInvoiceSelect.value));
+            deleteInvoiceBtn.addEventListener('click', () => performDelete(loadInvoiceSelect.value));
+            
+            signatureUpload.addEventListener('change', handleSignatureUpload);
+            removeSignatureBtn.addEventListener('click', removeSignature);
 
             // --- INITIALIZATION ---
             initDB();
@@ -805,4 +868,4 @@
         });
     </script>
 </body>
-</html>
+</ht
